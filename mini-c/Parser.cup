@@ -1,0 +1,194 @@
+import java_cup.runtime.*;
+import java.util.*;
+
+/* spe c */
+terminal int CST;
+terminal STRUCT, IF, ELSE, WHILE, RETURN, SIZEOF, INT;
+terminal Binop CMP;
+terminal FLECHE, EQUAL, OR, AND, PLUS, MINUS, TIMES, DIV, NOT, UMINUS, IFTHEN;
+terminal SEMICOLUMN, RA, LA, RP, LP, COMMA;
+terminal String IDENT;
+
+non terminal File file;
+non terminal Decl decl, decl_vars, decl_typ, decl_fct;
+non terminal Vars param;
+non terminal Expr expr;
+non terminal Instruction instruction;
+non terminal IBloc bloc;
+
+non terminal LinkedList<Decl> list_decl; 
+non terminal LinkedList<Decl_vars> list_decl_vars;
+non terminal LinkedList<String> nonempty_list_comma_ident, nonempty_comma_star_list_ident;
+non terminal LinkedList<Vars> list_comma_param;
+non terminal LinkedList<Expr> list_comma_expr;
+non terminal LinkedList<Instruction> list_instruction, non_empty_list_instruction;
+
+
+precedence right EQUAL;
+precedence left OR;
+precedence left AND;
+precedence left CMP;
+precedence left PLUS, MINUS;
+precedence left TIMES, DIV;
+precedence right NOT, UMINUS;
+precedence left FLECHE;
+precedence nonassoc IFTHEN;
+precedence nonassoc ELSE;
+
+
+start with file;
+
+file ::=
+  list_decl:l
+  {: RESULT = new File(l); :}
+;
+
+decl ::= 
+  decl_vars:d
+  {: RESULT = d; :} 
+| decl_typ:d
+  {: RESULT = d; :} 
+| decl_fct:d
+  {: RESULT = d; :} 
+;
+
+decl_vars ::=
+	INT nonempty_list_comma_ident:l SEMICOLUMN
+	{: RESULT = new Decl_vars(l); :}
+| STRUCT IDENT:name nonempty_comma_star_list_ident:l SEMICOLUMN
+	{: RESULT = new Decl_vars(l, name); :}
+;
+
+decl_typ ::= 
+	STRUCT IDENT:name LA list_decl_vars:l RA SEMICOLUMN
+	{: RESULT = new Decl_typ(name, l); :}
+;
+
+decl_fct ::=
+	INT IDENT:name LP list_comma_param:p RP bloc:b
+	{: RESULT = new Decl_fct(name, p, b); :}
+| STRUCT IDENT:st TIMES IDENT:name LP list_comma_param:p RP bloc:b
+ {: RESULT = new Decl_fct(st, name, p, b); :}
+;
+
+param ::=
+	INT IDENT:i
+	{: RESULT = new Int(i); :}
+| STRUCT IDENT:st TIMES IDENT:name
+   {: RESULT = new Struct(st, name); :}
+;
+
+expr ::=
+  CST:c
+{: RESULT = new Eint(c); :}
+| IDENT:e
+{: RESULT = new Eident(e); :}
+| expr:e FLECHE IDENT:i
+{: RESULT = new Eattribut(e, i); :}
+| IDENT:i LP list_comma_expr:l RP
+{: RESULT = new Efonc(i, l); :}
+| MINUS expr:e1
+    {: RESULT = new Eunop(Unop.Uneg, e1); :}
+  %prec UMINUS
+| NOT expr:e1
+    {: RESULT = new Eunop(Unop.Unot, e1); :}
+| expr:e1 EQUAL expr:e2
+{: RESULT = new Ebinop(Binop.Bass, e1, e2); :}
+| expr:e1 CMP:c expr:e2
+    {: RESULT = new Ebinop(c, e1, e2); :}
+| expr:e1 AND expr:e2
+    {: RESULT = new Ebinop(Binop.Band, e1, e2); :}
+| expr:e1 OR expr:e2
+    {: RESULT = new Ebinop(Binop.Bor, e1, e2); :}
+| expr:e1 PLUS expr:e2
+    {: RESULT = new Ebinop(Binop.Badd, e1, e2); :}
+| expr:e1 MINUS expr:e2
+    {: RESULT = new Ebinop(Binop.Bsub, e1, e2); :}
+| expr:e1 TIMES expr:e2
+    {: RESULT = new Ebinop(Binop.Bmul, e1, e2); :}
+| expr:e1 DIV expr:e2
+    {: RESULT = new Ebinop(Binop.Bdiv, e1, e2); :}
+| SIZEOF LP STRUCT IDENT:i RP
+{: RESULT = new Esizeof(i); :}
+| LP expr:e RP
+{: RESULT = e; :}
+;
+
+instruction ::=
+SEMICOLUMN
+ {: RESULT = new INull(); :}
+| expr:e SEMICOLUMN
+ {: RESULT = new IExpr(e); :}
+| IF LP expr:e RP instruction:i
+ {: RESULT = new IIf(e, i, null); :}
+ %prec IFTHEN
+| IF LP expr:e RP instruction:i1 ELSE instruction:i2
+ {: RESULT = new IIf(e, i1, i2); :}
+| WHILE LP expr:e RP instruction:i
+ {: RESULT = new IWhile(e, i); :}
+| bloc:b
+ {: RESULT = b; :}
+| RETURN expr:e SEMICOLUMN
+ {: RESULT = new IReturn(e); :}
+;
+
+bloc ::=
+	LA list_decl_vars:lv list_instruction:li RA
+	{: RESULT = new IBloc(lv, li); :}
+;
+
+list_instruction ::=
+  non_empty_list_instruction:l
+   {: RESULT = l; :}
+| {: RESULT = new LinkedList<Instruction>(); :}
+;
+
+non_empty_list_instruction ::=
+  instruction:x non_empty_list_instruction:l
+   {: l.addFirst(x); RESULT = l; :}
+| instruction:x
+   {: LinkedList<Instruction> l = new LinkedList<Instruction>();
+      l.add(x); RESULT = l; :}
+;
+
+nonempty_list_comma_ident ::=
+  IDENT:x COMMA nonempty_list_comma_ident:l
+   {: l.addFirst(x); RESULT = l; :}
+| IDENT:x
+   {: LinkedList<String> l = new LinkedList<String>();
+      l.add(x); RESULT = l; :}
+;
+ 
+nonempty_comma_star_list_ident ::=
+  TIMES IDENT:d COMMA nonempty_comma_star_list_ident:l
+   {: l.addFirst(d); RESULT = l; :}
+| TIMES IDENT:d {: LinkedList<String> l = new LinkedList<String>(); l.addFirst(d); RESULT = l; :}
+;
+
+
+list_comma_param ::=
+  param:d COMMA list_comma_param:l
+   {: l.addFirst(d); RESULT = l; :}
+| param:d {: LinkedList<Vars> l = new LinkedList<Vars>(); l.addFirst(d); RESULT = l; :}
+| {: RESULT = new LinkedList<Vars>(); :}
+;
+
+list_comma_expr ::=
+  expr:d COMMA list_comma_expr:l
+   {: l.addFirst(d); RESULT = l; :}
+| expr:d {: LinkedList<Expr> l = new LinkedList<Expr>(); l.addFirst(d); RESULT = l; :}
+| {: RESULT = new LinkedList<Expr>(); :}
+;
+
+list_decl ::=
+  decl:d list_decl:l
+   {: l.addFirst(d); RESULT = l; :}
+| {: RESULT = new LinkedList<Decl>(); :}
+;
+
+list_decl_vars ::=
+  decl_vars:d list_decl_vars:l
+   {: l.addFirst((Decl_vars) d); RESULT = l; :}
+|
+   {: RESULT = new LinkedList<Decl_vars>(); :}
+;
